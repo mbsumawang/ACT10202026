@@ -1,0 +1,411 @@
+
+section .data
+    menu db "----------------------------------", 10
+         db "MENU", 10
+         db "[A]dd", 10
+         db "[S]ubtract", 10
+         db "[M]ultiply", 10
+         db "[D]ivide", 10
+         db "----------------------------------", 10
+    menuLen equ $ - menu
+
+    clearScreen db 27, "[2J", 27, "[H"
+    clearScreenLen equ $ - clearScreen
+
+    choicePrompt db "Enter your choice: "
+    choicePromptLen equ $ - choicePrompt
+
+    firstPrompt db "Enter first number (0-99): "
+    firstPromptLen equ $ - firstPrompt
+
+    secondPrompt db "Enter second number (0-99): "
+    secondPromptLen equ $ - secondPrompt
+
+    retryPrompt db 10, "Do you want to try again (Y/N): "
+    retryPromptLen equ $ - retryPrompt
+
+    sumMsg db "The sum is "
+    sumMsgLen equ $ - sumMsg
+
+    differenceMsg db "The difference is "
+    differenceMsgLen equ $ - differenceMsg
+
+    productMsg db "The product is "
+    productMsgLen equ $ - productMsg
+
+    quotientMsg db "The quotient is "
+    quotientMsgLen equ $ - quotientMsg
+
+    remainderMsg db "The remainder is "
+    remainderMsgLen equ $ - remainderMsg
+
+    invalidChoice db "Invalid choice. Select A, S, M, or D.", 10
+    invalidChoiceLen equ $ - invalidChoice
+
+    invalidNumber db "Invalid number. Enter digits from 0 to 99.", 10
+    invalidNumberLen equ $ - invalidNumber
+
+    divideZeroMsg db "Cannot divide by zero.", 10
+    divideZeroLen equ $ - divideZeroMsg
+
+    invalidRetry db "Please enter Y or N.", 10
+    invalidRetryLen equ $ - invalidRetry
+
+    newline db 10
+
+section .bss
+    choice resb 8
+    retry resb 8
+    firstInput resb 8
+    secondInput resb 8
+
+    firstNum resd 1
+    secondNum resd 1
+    result resd 1
+    remainderValue resd 1
+    inputLength resd 1
+    numBuffer resb 16
+    isNegative resd 1
+
+section .text
+    global _start
+
+_start:
+
+menuLoop:
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, clearScreen
+    mov edx, clearScreenLen
+    int 0x80
+
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, menu
+    mov edx, menuLen
+    int 0x80
+
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, choicePrompt
+    mov edx, choicePromptLen
+    int 0x80
+
+    mov eax, 3
+    mov ebx, 0
+    mov ecx, choice
+    mov edx, 8
+    int 0x80
+
+    mov al, [choice]
+    cmp al, 'a'
+    jb checkChoice
+    cmp al, 'z'
+    ja checkChoice
+    sub byte [choice], 32
+
+checkChoice:
+    mov al, [choice]
+    cmp al, 'A'
+    je getNumbers
+    cmp al, 'S'
+    je getNumbers
+    cmp al, 'M'
+    je getNumbers
+    cmp al, 'D'
+    je getNumbers
+    jmp badChoice
+
+getNumbers:
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, firstPrompt
+    mov edx, firstPromptLen
+    int 0x80
+
+    mov eax, 3
+    mov ebx, 0
+    mov ecx, firstInput
+    mov edx, 8
+    int 0x80
+
+    mov [inputLength], eax
+    mov esi, firstInput
+    call convertInput
+
+    cmp eax, 0
+    jl badNumber
+
+    mov [firstNum], eax
+
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, secondPrompt
+    mov edx, secondPromptLen
+    int 0x80
+
+    mov eax, 3
+    mov ebx, 0
+    mov ecx, secondInput
+    mov edx, 8
+    int 0x80
+
+    mov [inputLength], eax
+    mov esi, secondInput
+    call convertInput
+
+    cmp eax, 0
+    jl badNumber
+
+    mov [secondNum], eax
+
+    mov al, [choice]
+    cmp al, 'A'
+    je doAdd
+    cmp al, 'S'
+    je doSubtract
+    cmp al, 'M'
+    je doMultiply
+    cmp al, 'D'
+    je doDivide
+    jmp badChoice
+
+doAdd:
+    call addNumbers
+
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, sumMsg
+    mov edx, sumMsgLen
+    int 0x80
+
+    mov eax, [result]
+    call printNumber
+    jmp askRetry
+
+doSubtract:
+    call subtractNumbers
+
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, differenceMsg
+    mov edx, differenceMsgLen
+    int 0x80
+
+    mov eax, [result]
+    call printNumber
+    jmp askRetry
+
+doMultiply:
+    call multiplyNumbers
+
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, productMsg
+    mov edx, productMsgLen
+    int 0x80
+
+    mov eax, [result]
+    call printNumber
+    jmp askRetry
+
+doDivide:
+    cmp dword [secondNum], 0
+    je divideByZero
+
+    call divideNumbers
+
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, quotientMsg
+    mov edx, quotientMsgLen
+    int 0x80
+
+    mov eax, [result]
+    call printNumber
+
+    cmp dword [remainderValue], 0
+    je askRetry
+
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, remainderMsg
+    mov edx, remainderMsgLen
+    int 0x80
+
+    mov eax, [remainderValue]
+    call printNumber
+    jmp askRetry
+
+badChoice:
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, invalidChoice
+    mov edx, invalidChoiceLen
+    int 0x80
+    jmp askRetry
+
+badNumber:
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, invalidNumber
+    mov edx, invalidNumberLen
+    int 0x80
+    jmp askRetry
+
+divideByZero:
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, divideZeroMsg
+    mov edx, divideZeroLen
+    int 0x80
+    jmp askRetry
+
+askRetry:
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, retryPrompt
+    mov edx, retryPromptLen
+    int 0x80
+
+    mov eax, 3
+    mov ebx, 0
+    mov ecx, retry
+    mov edx, 8
+    int 0x80
+
+    mov al, [retry]
+    cmp al, 'y'
+    je tryAgain
+    cmp al, 'Y'
+    je tryAgain
+    cmp al, 'n'
+    je exit
+    cmp al, 'N'
+    je exit
+
+    mov eax, 4
+    mov ebx, 1
+    mov ecx, invalidRetry
+    mov edx, invalidRetryLen
+    int 0x80
+    jmp askRetry
+
+tryAgain:
+    jmp menuLoop
+
+convertInput:
+    mov ecx, [inputLength]
+    cmp ecx, 0
+    jle inputInvalid
+
+    ; Remove newline if present
+    cmp byte [esi + ecx - 1], 10
+    jne convertStart
+    dec ecx
+
+convertStart:
+    cmp ecx, 1
+    jl inputInvalid
+    cmp ecx, 2
+    ja inputInvalid
+
+    xor ebx, ebx
+
+convertDigits:
+    movzx edx, byte [esi]
+
+    cmp edx, '0'
+    jb inputInvalid
+    cmp edx, '9'
+    ja inputInvalid
+
+    sub edx, '0'
+    imul ebx, ebx, 10
+    add ebx, edx
+
+    inc esi
+    loop convertDigits
+
+    mov eax, ebx
+    ret
+
+inputInvalid:
+    mov eax, -1
+    ret
+
+addNumbers:
+    mov eax, [firstNum]
+    add eax, [secondNum]
+    mov [result], eax
+    ret
+
+subtractNumbers:
+    mov eax, [firstNum]
+    sub eax, [secondNum]
+    mov [result], eax
+    ret
+
+multiplyNumbers:
+    mov eax, [firstNum]
+    imul eax, dword [secondNum]
+    mov [result], eax
+    ret
+
+divideNumbers:
+    mov eax, [firstNum]
+    xor edx, edx
+    div dword [secondNum]
+
+    mov [result], eax
+    mov [remainderValue], edx
+    ret
+
+
+; PROCEDURE 6: Print signed integer in EAX
+printNumber:
+    mov dword [isNegative], 0
+
+    cmp eax, 0
+    jge numberPositive
+
+    mov dword [isNegative], 1
+    neg eax
+
+numberPositive:
+    mov edi, numBuffer + 15
+    mov byte [edi], 10
+    mov ecx, 10
+
+numberDigits:
+    xor edx, edx
+    div ecx
+
+    add dl, '0'
+    dec edi
+    mov [edi], dl
+
+    test eax, eax
+    jnz numberDigits
+
+    cmp dword [isNegative], 0
+    je printNumberNow
+
+    dec edi
+    mov byte [edi], '-'
+
+printNumberNow:
+    mov ecx, edi
+    mov edx, numBuffer + 16
+    sub edx, edi
+
+    mov eax, 4
+    mov ebx, 1
+    int 0x80
+    ret
+
+
+exit:
+    mov eax, 1
+    xor ebx, ebx
+    int 0x80
